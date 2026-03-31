@@ -1,0 +1,82 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.5'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+description = 'SpringClaudeTurtorial'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Web & Data
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // AOP — Phase 2
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+    // Database
+    runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
+    runtimeOnly 'com.h2database:h2'           // in-memory DB cho local + test
+
+    // Migration — Phase 4
+    implementation 'org.flywaydb:flyway-core'
+
+    // Security — Phase 5
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-test'
+
+    // JWT — Phase 5
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // Spring Batch — Phase 9
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    testImplementation 'org.springframework.batch:spring-batch-test'
+
+    // Kafka — Phase 8
+    implementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.testcontainers:kafka'
+
+    // Distributed Tracing — Phase 6
+    implementation 'io.micrometer:micrometer-tracing-bridge-brave'   // Brave/Zipkin bridge
+    implementation 'io.zipkin.reporter2:zipkin-reporter-brave'        // gửi traces đến Zipkin
+    implementation 'io.micrometer:micrometer-registry-prometheus'     // Prometheus metrics
+
+    // Resilience4j — Phase 6
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.3.0'
+
+    // Reactive — Phase 5 (WebFlux brings Reactor: Mono/Flux + WebClient)
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // Dev tools
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Testcontainers — Phase 7
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly    'org.postgresql:postgresql'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

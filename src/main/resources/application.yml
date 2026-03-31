@@ -1,0 +1,192 @@
+# ══════════════════════════════════════════════════════
+# application.yml — Cấu hình mặc định (tất cả profiles)
+# ══════════════════════════════════════════════════════
+
+spring:
+  application:
+    name: spring-tutorial
+
+  # Profile active — đổi thành 'production' khi deploy
+  profiles:
+    active: local
+
+  # JPA baseline config
+  jpa:
+    open-in-view: false          # QUAN TRỌNG: tắt để tránh lazy-loading ngoài transaction
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Flyway — Phase 4
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+# ── App custom config ─────────────────────────────────
+app:
+  # JWT — Phase 5
+  jwt:
+    secret: "this-is-a-very-long-secret-key-for-hs256-algorithm-32bytes!!"
+    expiration-ms: 3600000   # 1 hour
+  name: Spring Tutorial App
+  version: 1.0.0
+  max-connections: 10
+  features:
+    new-ui-enabled: false
+    analytics-enabled: false
+  payment:
+    timeout-seconds: 30
+    retry-max: 3
+    supported-gateways:
+      - vnpay
+      - momo
+      - zalopay
+  mail:
+    from: noreply@example.com
+    subject-prefix: "[Tutorial]"
+
+# ── Spring Batch — Phase 9 ───────────────────────────
+spring:
+  batch:
+    jdbc:
+      initialize-schema: always   # tự tạo metadata tables (BATCH_JOB_INSTANCE, ...)
+    job:
+      enabled: false              # KHÔNG tự chạy job khi app khởi động
+
+# ── Kafka — Phase 8 ──────────────────────────────────
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all           # chờ tất cả replica xác nhận → durability cao nhất
+      retries: 3
+      properties:
+        spring.json.add.type.headers: false   # không thêm __TypeId__ header
+    consumer:
+      group-id: spring-tutorial-group
+      auto-offset-reset: earliest   # đọc từ đầu nếu chưa có offset
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.example.springclaudeturtorial.phase8.*"
+    listener:
+      ack-mode: MANUAL_IMMEDIATE   # consumer tự commit offset (không tự động)
+
+# ── Resilience4j — Phase 6 ───────────────────────────
+resilience4j:
+
+  # Circuit Breaker: ngắt mạch khi service downstream lỗi nhiều
+  circuitbreaker:
+    instances:
+      externalApi:                         # tên instance — dùng trong @CircuitBreaker(name="externalApi")
+        sliding-window-type: COUNT_BASED   # đếm theo số request (không phải thời gian)
+        sliding-window-size: 10            # xem xét 10 request gần nhất
+        failure-rate-threshold: 50         # nếu ≥50% fail → OPEN (ngắt mạch)
+        wait-duration-in-open-state: 10s   # sau 10s → thử lại (HALF_OPEN)
+        permitted-calls-in-half-open-state: 3  # cho 3 request thử
+        automatic-transition-from-open-to-half-open-enabled: true
+
+  # Retry: tự động thử lại khi lỗi tạm thời
+  retry:
+    instances:
+      externalApi:
+        max-attempts: 3                    # thử tối đa 3 lần (1 lần đầu + 2 retry)
+        wait-duration: 500ms               # chờ 500ms giữa các lần thử
+        retry-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+
+  # Rate Limiter: giới hạn số call trong khoảng thời gian
+  ratelimiter:
+    instances:
+      externalApi:
+        limit-for-period: 5                # tối đa 5 request
+        limit-refresh-period: 1s           # mỗi 1 giây reset
+        timeout-duration: 0               # không chờ — từ chối ngay nếu vượt limit
+
+# ── Actuator + Tracing ────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,beans,circuitbreakers,prometheus
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0   # sample 100% requests (production: 0.1 = 10%)
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans   # Zipkin server
+
+---
+# ══════════════════════════════════════════════════════
+# Profile: local
+# ══════════════════════════════════════════════════════
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:tutorialdb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+app:
+  features:
+    new-ui-enabled: true
+    analytics-enabled: false
+  payment:
+    timeout-seconds: 5   # timeout ngắn để test nhanh
+  mail:
+    from: dev@localhost
+
+logging:
+  # %X{traceId} và %X{spanId} được Micrometer Tracing tự inject vào MDC
+  pattern:
+    level: "%5p [${spring.application.name},%X{traceId:-},%X{spanId:-}]"
+  level:
+    com.example: DEBUG
+    org.springframework.web: DEBUG
+
+---
+# ══════════════════════════════════════════════════════
+# Profile: production
+# ══════════════════════════════════════════════════════
+spring:
+  config:
+    activate:
+      on-profile: production
+  datasource:
+    url: ${DB_URL}                  # inject từ env variable
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate            # KHÔNG auto-create ở production
+    show-sql: false
+
+app:
+  features:
+    new-ui-enabled: true
+    analytics-enabled: true
+  payment:
+    timeout-seconds: 30
+
+logging:
+  level:
+    com.example: INFO
+    root: WARN
